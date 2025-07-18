@@ -40,27 +40,3 @@ if uploaded_file is not None:
         st.info(f"Confidence: {confidence:.2f}%")
     else:
         st.error("Could not process the audio. Please try again with a clear .wav file.")
-from streamlit_audio_recorder import audio_recorder
-import tempfile
-
-st.subheader("🎤 Or record your voice")
-
-audio_bytes = audio_recorder()
-
-if audio_bytes:
-    # Save to temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-        f.write(audio_bytes)
-        temp_audio_path = f.name
-
-    st.audio(temp_audio_path, format='audio/wav')
-
-    features = extract_mfcc(temp_audio_path)
-    if features is not None:
-        prediction = model.predict([features])[0]
-        proba = model.predict_proba([features])
-        confidence = np.max(proba) * 100
-        st.success(f"Predicted Accent: **{prediction.capitalize()}** 🎯")
-        st.info(f"Confidence: {confidence:.2f}%")
-    else:
-        st.error("Could not process the recorded audio.")
