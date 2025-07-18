@@ -3,7 +3,7 @@ librosa
 numpy
 scikit-learn
 soundfile
-streamlit-audio-recorder
+
 
 
 
