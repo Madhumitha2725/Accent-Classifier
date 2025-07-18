@@ -40,28 +40,46 @@ if uploaded_file is not None:
         st.info(f"Confidence: {confidence:.2f}%")
     else:
         st.error("Could not process the audio. Please try again with a clear .wav file.")
-from streamlit_audio_recorder import audio_recorder
-import tempfile
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import av
+import soundfile as sf
 
-st.subheader("🎤 Or record your voice")
+st.subheader("🎤 Or record your voice (3 seconds recommended)")
 
-audio_bytes = audio_recorder()
+class AudioProcessor:
+    def __init__(self):
+        self.audio_frames = []
 
-if audio_bytes:
-    # Save the recording to a temporary WAV file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-        f.write(audio_bytes)
-        temp_audio_path = f.name
+    def recv(self, frame):
+        self.audio_frames.append(frame.to_ndarray())
+        return frame
 
-    st.audio(temp_audio_path, format='audio/wav')
-    
-    features = extract_mfcc(temp_audio_path)
-    if features is not None:
-        prediction = model.predict([features])[0]
-        proba = model.predict_proba([features])
-        confidence = np.max(proba) * 100
-        st.success(f"Predicted Accent: **{prediction.capitalize()}** 🎯")
-        st.info(f"Confidence: {confidence:.2f}%")
-    else:
-        st.error("Could not process the recorded audio.")
+ctx = webrtc_streamer(
+    key="sendonly-audio",
+    mode=WebRtcMode.SENDONLY,
+    audio_receiver_size=1024,
+    media_stream_constraints={"audio": True, "video": False},
+    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+)
 
+if ctx.audio_receiver:
+    audio_processor = AudioProcessor()
+    audio_frames = ctx.audio_receiver.get_frames(timeout=2)
+
+    if audio_frames:
+        for frame in audio_frames:
+            audio_processor.recv(frame)
+
+        # Combine and save the audio
+        audio_data = np.concatenate(audio_processor.audio_frames, axis=0)
+        temp_path = "recorded.wav"
+        sf.write(temp_path, audio_data, 48000)
+
+        st.audio(temp_path)
+
+        features = extract_mfcc(temp_path)
+        if features is not None:
+            prediction = model.predict([features])[0]
+            confidence = np.max(model.predict_proba([features])) * 100
+            st.success(f"Predicted Accent: **{prediction.capitalize()}** 🎯")
+            st.info(f"Confidence: {confidence:.2f}%")
